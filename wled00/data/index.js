@@ -370,11 +370,11 @@ function getRuntimeStr(rt)
 	var hrs = Math.floor((t - days*86400)/3600);
 	var mins = Math.floor((t - days*86400 - hrs*3600)/60);
 	var str = days ? (days + " " + (days == 1 ? "day" : "days") + ", ") : "";
-	str += (hrs || days) ? (hrs + " " + (hrs == 1 ? "hour" : "hours")) : "";
+	str += (hrs || days) ? (String(hrs).padStart(2,'0') + " " + (hrs == 1 ? "hour" : "hours")) : "";
 	if (!days && hrs) str += ", ";
-	if (t > 59 && !days) str += mins + " min";
+	if (t > 59 && !days) str += String(mins).padStart(2,'0') + " min";
 	if (t < 3600 && t > 59) str += ", ";
-	if (t < 3600) str += (t - mins*60) + " sec";
+	if (t < 3600) str += String(t - mins*60).padStart(2,'0') + " sec";
 	return str;
 }
 
@@ -729,7 +729,7 @@ ${i.opt&0x100?inforow("Debug","<button class=\"btn btn-xs\" onclick=\"requestJso
 ${inforow("Build",i.vid)}
 ${inforow("Signal strength",i.wifi.signal +"% ("+ i.wifi.rssi, " dBm)")}
 ${inforow("Uptime",getRuntimeStr(i.uptime))}
-${inforow("Time",i.time)}
+${inforow("Time", i.time ? i.time.replace(/\b(\d)\b/g, match => match.padStart(2, '0')) : '')}
 ${inforow("Free heap",(i.freeheap/1024).toFixed(1)," kB")}
 ${i.psram?inforow("Free PSRAM",(i.psram/1024).toFixed(1)," kB"):""}
 ${inforow("Estimated current",pwru)}
