@@ -7,10 +7,6 @@
 #include <driver/i2s.h>
 #include <driver/adc.h>
 
-#ifdef WLED_ENABLE_DMX
-  #error This audio reactive usermod is not compatible with DMX Out.
-#endif
-
 #endif
 
 #if defined(ARDUINO_ARCH_ESP32) && (defined(WLED_DEBUG) || defined(SR_DEBUG))
@@ -75,7 +71,7 @@ static uint8_t  soundAgc = 0;                   // Automagic gain control: 0 - n
 //static float    volumeSmth = 0.0f;              // either sampleAvg or sampleAgc depending on soundAgc; smoothed sample
 static float FFT_MajorPeak = 1.0f;              // FFT: strongest (peak) frequency
 static float FFT_Magnitude = 0.0f;              // FFT: volume (magnitude) of peak frequency
-static bool samplePeak = false;      // Boolean flag for peak - used in effects. Responding routine may reset this flag. Auto-reset after strip.getMinShowDelay()
+static bool samplePeak = false;      // Boolean flag for peak - used in effects. Responding routine may reset this flag. Auto-reset after strip.getFrameTime()
 static bool udpSamplePeak = false;   // Boolean flag for peak. Set at the same time as samplePeak, but reset by transmitAudioData
 static unsigned long timeOfPeak = 0; // time of last sample peak detection.
 static uint8_t fftResult[NUM_GEQ_CHANNELS]= {0};// Our calculated freq. channel result table to be used by effects
@@ -536,8 +532,8 @@ static void detectSamplePeak(void) {
 #endif
 
 static void autoResetPeak(void) {
-  uint16_t MinShowDelay = MAX(50, strip.getMinShowDelay());  // Fixes private class variable compiler error. Unsure if this is the correct way of fixing the root problem. -THATDONFC
-  if (millis() - timeOfPeak > MinShowDelay) {          // Auto-reset of samplePeak after a complete frame has passed.
+  uint16_t peakDelay = max(uint16_t(50), strip.getFrameTime());
+  if (millis() - timeOfPeak > peakDelay) {          // Auto-reset of samplePeak after at least one complete frame has passed.
     samplePeak = false;
     if (audioSyncEnabled == 0) udpSamplePeak = false;  // this is normally reset by transmitAudioData
   }
@@ -1225,7 +1221,6 @@ class AudioReactive : public Usermod {
         #if  !defined(CONFIG_IDF_TARGET_ESP32S2) && !defined(CONFIG_IDF_TARGET_ESP32C3) && !defined(CONFIG_IDF_TARGET_ESP32S3)
         // ADC over I2S is only possible on "classic" ESP32
         case 0:
-        default:
           DEBUGSR_PRINTLN(F("AR: Analog Microphone (left channel only)."));
           audioSource = new I2SAdcSource(SAMPLE_RATE, BLOCK_SIZE);
           delay(100);
@@ -1233,6 +1228,13 @@ class AudioReactive : public Usermod {
           if (audioSource) audioSource->initialize(audioPin);
           break;
         #endif
+
+        case 255: // 255 = -1 = no audio source
+          // falls through to default
+        default:
+          if (audioSource) delete audioSource; audioSource = nullptr;
+          enabled = false;
+        break;
       }
       delay(250); // give microphone enough time to initialise
 
@@ -1319,7 +1321,7 @@ class AudioReactive : public Usermod {
         disableSoundProcessing = true;
       } else {
         #if defined(ARDUINO_ARCH_ESP32) && defined(WLED_DEBUG)
-        if ((disableSoundProcessing == true) && (audioSyncEnabled == 0) && audioSource->isInitialized()) {    // we just switched to "enabled"
+        if ((disableSoundProcessing == true) && (audioSyncEnabled == 0) && audioSource && audioSource->isInitialized()) {    // we just switched to "enabled"
           DEBUG_PRINTLN(F("[AR userLoop]  realtime mode ended - audio processing resumed."));
           DEBUG_PRINTF_P(PSTR("               RealtimeMode = %d; RealtimeOverride = %d\n"), int(realtimeMode), int(realtimeOverride));
         }
@@ -1331,7 +1333,7 @@ class AudioReactive : public Usermod {
       if (audioSyncEnabled & 0x02) disableSoundProcessing = true;   // make sure everything is disabled IF in audio Receive mode
       if (audioSyncEnabled & 0x01) disableSoundProcessing = false;  // keep running audio IF we're in audio Transmit mode
 #ifdef ARDUINO_ARCH_ESP32
-      if (!audioSource->isInitialized()) disableSoundProcessing = true;  // no audio source
+      if (!audioSource || !audioSource->isInitialized()) disableSoundProcessing = true;  // no audio source
 
 
       // Only run the sampling code IF we're not in Receive mode or realtime mode

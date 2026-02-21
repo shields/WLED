@@ -688,6 +688,8 @@ function parseInfo(i) {
 //		gId("filterVol").classList.add("hide"); hideModes(" ♪"); // hide volume reactive effects
 //		gId("filterFreq").classList.add("hide"); hideModes(" ♫"); // hide frequency reactive effects
 //	}
+	// Check for version upgrades on page load
+	checkVersionUpgrade(i);
 }
 
 //https://stackoverflow.com/questions/2592092/executing-script-elements-inserted-with-innerhtml
@@ -773,8 +775,8 @@ function populateSegments(s)
 		}
 
 		let segp = `<div id="segp${i}" class="sbs">`+
-						`<i class="icons slider-icon pwr ${inst.on ? "act":""}" id="seg${i}pwr" onclick="setSegPwr(${i})">&#xe08f;</i>`+
-						`<div class="sliderwrap il">`+
+						`<i class="icons slider-icon pwr ${inst.on ? "act":""}" id="seg${i}pwr" title="Power" onclick="setSegPwr(${i})">&#xe08f;</i>`+
+						`<div class="sliderwrap il" title="Opacity/Brightness">`+
 							`<input id="seg${i}bri" class="noslide" onchange="setSegBri(${i})" oninput="updateTrail(this)" max="255" min="1" type="range" value="${inst.bri}" />`+
 							`<div class="sliderdisplay"></div>`+
 						`</div>`+
@@ -810,7 +812,7 @@ function populateSegments(s)
 		cn += `<div class="seg lstI ${i==s.mainseg && !simplifiedUI ? 'selected' : ''} ${exp ? "expanded":""}" id="seg${i}" data-set="${inst.set}">`+
 				`<label class="check schkl ${smpl}">`+
 					`<input type="checkbox" id="seg${i}sel" onchange="selSeg(${i})" ${inst.sel ? "checked":""}>`+
-					`<span class="checkmark"></span>`+
+					`<span class="checkmark" title="Select"></span>`+
 				`</label>`+
 				`<div class="segname ${smpl}" onclick="selSegEx(${i})">`+
 					`<i class="icons e-icon frz" id="seg${i}frz" title="(un)Freeze" onclick="event.preventDefault();tglFreeze(${i});">&#x${inst.frz ? (li.live && li.liveseg==i?'e410':'e0e8') : 'e325'};</i>`+
@@ -1659,13 +1661,17 @@ function setEffectParameters(idx)
 			paOnOff[0] = paOnOff[0].substring(0,dPos);
 		}
 		if (paOnOff.length>0 && paOnOff[0] != "!") text = paOnOff[0];
+		gId("adPal").classList.remove("hide");
+		if (lastinfo.cpalcount>0) gId("rmPal").classList.remove("hide");
 	} else {
 		// disable palette list
 		text += ' not used';
 		palw.style.display = "none";
+		gId("adPal").classList.add("hide");
+		gId("rmPal").classList.add("hide");
 		// Close palette dialog if not available
-		if (gId("palw").lastElementChild.tagName == "DIALOG") {
-			gId("palw").lastElementChild.close();
+		if (palw.lastElementChild.tagName == "DIALOG") {
+			palw.lastElementChild.close();
 		}
 	}
 	pall.innerHTML = icon + text;
@@ -1879,7 +1885,7 @@ function makeSeg()
 function resetUtil(off=false)
 {
 	gId('segutil').innerHTML = `<div class="seg btn btn-s${off?' off':''}" style="padding:0;margin-bottom:12px;">`
-	+ '<label class="check schkl"><input type="checkbox" id="selall" onchange="selSegAll(this)"><span class="checkmark"></span></label>'
+	+ '<label class="check schkl"><input type="checkbox" id="selall" onchange="selSegAll(this)"><span class="checkmark" title="Select all"></span></label>'
 	+ `<div class="segname" ${off?'':'onclick="makeSeg()"'}><i class="icons btn-icon">&#xe18a;</i>Add segment</div>`
 	+ '<div class="pop hide" onclick="event.stopPropagation();">'
 	+ `<i class="icons g-icon" title="Select group" onclick="this.nextElementSibling.classList.toggle('hide');">&#xE34B;</i>`
@@ -2649,28 +2655,28 @@ function fromRgb()
 	var g = gId('sliderG').value;
 	var b = gId('sliderB').value;
 	setPicker(`rgb(${r},${g},${b})`);
-	let cd = gId('csl').children; // color slots
-	cd[csel].dataset.r = r;
-	cd[csel].dataset.g = g;
-	cd[csel].dataset.b = b;
-	setCSL(cd[csel]);
+	let cd = gId('csl').children[csel]; // color slots
+	cd.dataset.r = r;
+	cd.dataset.g = g;
+	cd.dataset.b = b;
+	setCSL(cd);
 }
 
 function fromW()
 {
 	let w = gId('sliderW');
-	let cd = gId('csl').children; // color slots
-	cd[csel].dataset.w = w.value;
-	setCSL(cd[csel]);
+	let cd = gId('csl').children[csel]; // color slots
+	cd.dataset.w = w.value;
+	setCSL(cd);
 	updateTrail(w);
 }
 
 // sr 0: from RGB sliders, 1: from picker, 2: from hex
 function setColor(sr)
 {
-	var cd = gId('csl').children; // color slots
-	let cdd = cd[csel].dataset;
-	let w = 0, r,g,b;
+	var cd = gId('csl').children[csel]; // color slots
+	let cdd = cd.dataset;
+	let w = parseInt(cdd.w), r = parseInt(cdd.r), g = parseInt(cdd.g), b = parseInt(cdd.b);
 	if (sr == 1 && isRgbBlack(cdd)) cpick.color.setChannel('hsv', 'v', 100);
 	if (sr != 2 && hasWhite) w = parseInt(gId('sliderW').value);
 	var col = cpick.color.rgb;
@@ -2678,7 +2684,7 @@ function setColor(sr)
 	cdd.g = g = hasRGB ? col.g : w;
 	cdd.b = b = hasRGB ? col.b : w;
 	cdd.w = w;
-	setCSL(cd[csel]);
+	setCSL(cd);
 	var obj = {"seg": {"col": [[],[],[]]}};
 	obj.seg.col[csel] = [r, g, b, w];
 	requestJson(obj);
@@ -3114,10 +3120,9 @@ function mergeDeep(target, ...sources)
 	return mergeDeep(target, ...sources);
 }
 
-function tooltip(cont=null)
-{
+function tooltip(cont=null) {
 	d.querySelectorAll((cont?cont+" ":"")+"[title]").forEach((element)=>{
-		element.addEventListener("mouseover", ()=>{
+		element.addEventListener("pointerover", ()=>{
 			// save title
 			element.setAttribute("data-title", element.getAttribute("title"));
 			const tooltip = d.createElement("span");
@@ -3142,7 +3147,7 @@ function tooltip(cont=null)
 			tooltip.classList.add("visible");
 		});
 
-		element.addEventListener("mouseout", ()=>{
+		element.addEventListener("pointerout", ()=>{
 			d.querySelectorAll('.tooltip').forEach((tooltip)=>{
 				tooltip.classList.remove("visible");
 				d.body.removeChild(tooltip);
@@ -3243,6 +3248,191 @@ function simplifyUI() {
 
 	// Hide buttons for pixel art and custom palettes (add / delete)
 	gId("btns").style.display = "none";
+}
+
+// Version reporting feature
+var versionCheckDone = false;
+
+function checkVersionUpgrade(info) {
+	// Only check once per page load
+	if (versionCheckDone) return;
+	versionCheckDone = true;
+
+	// Suppress feature if in AP mode (no internet connection available)
+	if (info.wifi && info.wifi.ap) return;
+
+	// Fetch version-info.json using existing /edit endpoint
+	fetch(getURL('/edit?edit=/version-info.json'), {
+		method: 'get'
+	})
+		.then(res => {
+			if (res.status === 404) {
+				// File doesn't exist - first install, show install prompt
+				showVersionUpgradePrompt(info, null, info.ver);
+				return null;
+			}
+			if (!res.ok) {
+				throw new Error('Failed to fetch version-info.json');
+			}
+			return res.json();
+		})
+		.then(versionInfo => {
+			if (!versionInfo) return; // 404 case already handled
+
+			// Check if user opted out
+			if (versionInfo.neverAsk) return;
+
+			// Check if version has changed
+			const currentVersion = info.ver;
+			const storedVersion = versionInfo.version || '';
+
+			if (storedVersion && storedVersion !== currentVersion) {
+				// Version has changed, show upgrade prompt
+				showVersionUpgradePrompt(info, storedVersion, currentVersion);
+			} else if (!storedVersion) {
+				// Empty version in file, show install prompt
+				showVersionUpgradePrompt(info, null, currentVersion);
+			}
+		})
+		.catch(e => {
+			console.log('Failed to load version-info.json', e);
+		});
+}
+
+function showVersionUpgradePrompt(info, oldVersion, newVersion) {
+	// Determine if this is an install or upgrade
+	const isInstall = !oldVersion;
+
+	// Create overlay and dialog
+	const overlay = d.createElement('div');
+	overlay.id = 'versionUpgradeOverlay';
+	overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:10000;display:flex;align-items:center;justify-content:center;';
+
+	const dialog = d.createElement('div');
+	dialog.style.cssText = 'background:var(--c-1);border-radius:10px;padding:25px;max-width:500px;margin:20px;box-shadow:0 4px 6px rgba(0,0,0,0.3);';
+
+	// Build contextual message based on install vs upgrade
+	const title = isInstall
+		? '🎉 Thank you for installing WLED!'
+		: '🎉 WLED Upgrade Detected!';
+
+	const description = isInstall
+		? `You are now running WLED <strong style="text-wrap: nowrap">${newVersion}</strong>.`
+		: `Your WLED has been upgraded from <strong style="text-wrap: nowrap">${oldVersion}</strong> to <strong style="text-wrap: nowrap">${newVersion}</strong>.`;
+
+	const question = 'Help make WLED better with a one-time hardware report? It includes only device details like chip type, LED count, etc. — never personal data or your activities.'
+
+	dialog.innerHTML = `
+		<h2 style="margin-top:0;color:var(--c-f);">${title}</h2>
+		<p style="color:var(--c-f);">${description}</p>
+		<p style="color:var(--c-f);">${question}</p>
+		<p style="color:var(--c-f);font-size:0.9em;">
+			<a href="https://kno.wled.ge/about/privacy-policy/" target="_blank" style="color:var(--c-6);">Learn more about what data is collected and why</a>
+		</p>
+		<div style="margin-top:20px;">
+			<button id="versionReportYes" class="btn">Yes</button>
+			<button id="versionReportNo" class="btn">Not Now</button>
+			<button id="versionReportNever" class="btn">Never Ask</button>
+		</div>
+	`;
+
+	overlay.appendChild(dialog);
+	d.body.appendChild(overlay);
+
+	// Add event listeners
+	gId('versionReportYes').addEventListener('click', () => {
+		reportUpgradeEvent(info, oldVersion);
+		d.body.removeChild(overlay);
+	});
+
+	gId('versionReportNo').addEventListener('click', () => {
+		// Don't update version, will ask again on next load
+		d.body.removeChild(overlay);
+	});
+
+	gId('versionReportNever').addEventListener('click', () => {
+		updateVersionInfo(newVersion, true);
+		d.body.removeChild(overlay);
+		showToast('You will not be asked again.');
+	});
+}
+
+function reportUpgradeEvent(info, oldVersion) {
+	showToast('Reporting upgrade...');
+
+	// Fetch fresh data from /json/info endpoint as requested
+	fetch(getURL('/json/info'), {
+		method: 'get'
+	})
+		.then(res => res.json())
+		.then(infoData => {
+			// Map to UpgradeEventRequest structure per OpenAPI spec
+			// Required fields: deviceId, version, previousVersion, releaseName, chip, ledCount, isMatrix, bootloaderSHA256
+			const upgradeData = {
+				deviceId: infoData.deviceId,                     // Use anonymous unique device ID
+				version: infoData.ver || '',                     // Current version string
+				previousVersion: oldVersion || '',               // Previous version from version-info.json
+				releaseName: infoData.release || '',             // Release name (e.g., "WLED 0.15.0")
+				chip: infoData.arch || '',                       // Chip architecture (esp32, esp8266, etc)
+				ledCount: infoData.leds ? infoData.leds.count : 0,  // Number of LEDs
+				isMatrix: !!(infoData.leds && infoData.leds.matrix),  // Whether it's a 2D matrix setup
+				bootloaderSHA256: infoData.bootloaderSHA256 || '',   // Bootloader SHA256 hash
+				brand: infoData.brand,                           // Device brand (always present)
+				product: infoData.product,                       // Product name (always present)
+				flashSize: infoData.flash                        // Flash size (always present)
+			};
+
+			// Add optional fields if available
+			if (infoData.psram !== undefined) upgradeData.psramSize = Math.round(infoData.psram / (1024 * 1024));  // convert bytes to MB
+			// Note: partitionSizes not currently available in /json/info endpoint
+
+			// Make AJAX call to postUpgradeEvent API
+			return fetch('https://usage.wled.me/api/usage/upgrade', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify(upgradeData)
+			});
+		})
+		.then(res => {
+			if (res.ok) {
+				showToast('Thank you for reporting!');
+				updateVersionInfo(info.ver, false);
+			} else {
+				showToast('Report failed. Please try again later.', true);
+				// Do NOT update version info on failure - user will be prompted again
+			}
+		})
+		.catch(e => {
+			console.log('Failed to report upgrade', e);
+			showToast('Report failed. Please try again later.', true);
+			// Do NOT update version info on error - user will be prompted again
+		});
+}
+
+function updateVersionInfo(version, neverAsk) {
+	const versionInfo = {
+		version: version,
+		neverAsk: neverAsk
+	};
+
+	// Create a Blob with JSON content and use /upload endpoint
+	const blob = new Blob([JSON.stringify(versionInfo)], {type: 'application/json'});
+	const formData = new FormData();
+	formData.append('data', blob, 'version-info.json');
+
+	fetch(getURL('/upload'), {
+		method: 'POST',
+		body: formData
+	})
+		.then(res => res.text())
+		.then(data => {
+			console.log('Version info updated', data);
+		})
+		.catch(e => {
+			console.log('Failed to update version-info.json', e);
+		});
 }
 
 size();
